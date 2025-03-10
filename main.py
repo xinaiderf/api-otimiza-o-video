@@ -66,4 +66,4 @@ async def overlay_api(video_base: UploadFile = File(...), video_overlay: UploadF
         os.remove(temp_video_overlay)
 
 if __name__ == '__main__':
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host="0.0.0.0", port=8011)
