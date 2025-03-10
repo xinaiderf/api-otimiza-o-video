@@ -46,4 +46,4 @@ async def compress_video_api(video: UploadFile = File(...), crf: int = 28):
         os.remove(temp_output_video)
 
 if __name__ == '__main__':
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host="0.0.0.0", port=8011)
