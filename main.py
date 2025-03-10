@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 import tempfile
 import os
 import uvicorn
