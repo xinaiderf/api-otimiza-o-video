@@ -1,14 +1,14 @@
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse
-from moviepy.editor import VideoFileClip
 import tempfile
 import os
 import uvicorn
+from moviepy.video.io.VideoFileClip import VideoFileClip
 
 app = FastAPI()
 
 def compress_video(input_video_path, output_video_path, crf_value=28):
-    # Usa o gerenciador de contexto para garantir que o vídeo seja fechado após a conversão
+    # Utiliza o gerenciador de contexto para garantir o fechamento adequado do vídeo
     with VideoFileClip(input_video_path) as video_clip:
         video_clip.write_videofile(
             output_video_path,
