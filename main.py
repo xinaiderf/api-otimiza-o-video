@@ -1,6 +1,6 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse
-from moviepy import VideoFileClip
+from moviepy.editor import VideoFileClip
 import tempfile
 import os
 import uvicorn
@@ -8,43 +8,55 @@ import uvicorn
 app = FastAPI()
 
 def compress_video(input_video_path, output_video_path, crf_value=28):
-    # Carregar o vídeo original
-    video_clip = VideoFileClip(input_video_path)
-    
-    # Escrever o vídeo comprimido com configurações otimizadas
-    video_clip.write_videofile(
-        output_video_path,
-        codec="libx264",  # Codec utilizado para compressão eficiente
-        audio_codec="aac",  # Codec de áudio para compatibilidade
-        threads=4,  # Utilize 4 threads para acelerar a compressão
-        preset="ultrafast",  # Preset para acelerar o processo (pode aumentar o tamanho do arquivo)
-        ffmpeg_params=["-crf", str(crf_value)],  # Ajusta o valor de CRF para a compressão
-        logger=None  # Desativa logs detalhados para melhorar performance
-    )
+    # Usa o gerenciador de contexto para garantir que o vídeo seja fechado após a conversão
+    with VideoFileClip(input_video_path) as video_clip:
+        video_clip.write_videofile(
+            output_video_path,
+            codec="libx264",         # Codec para compressão eficiente
+            audio_codec="aac",        # Codec de áudio para compatibilidade
+            preset="ultrafast",       # Preset para acelerar o processo (pode aumentar o tamanho do arquivo)
+            ffmpeg_params=["-crf", str(crf_value)],  # Ajusta o valor de CRF para a compressão
+            logger=None,              # Desativa logs detalhados para melhorar a performance
+            progress_bar=False        # Remove a barra de progresso para reduzir overhead
+        )
+
+def cleanup_file(path: str):
+    try:
+        os.remove(path)
+    except Exception as e:
+        print(f"Falha ao remover o arquivo {path}: {e}")
 
 @app.post("/compress/")
-async def compress_video_api(video: UploadFile = File(...), crf: int = 28):
-    # Usando NamedTemporaryFile para garantir que o arquivo temporário seja criado corretamente
-    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_input_video:
-        temp_input_video.write(await video.read())
-        temp_input_video_path = temp_input_video.name
-    
-    # Usando NamedTemporaryFile para o arquivo de saída
-    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_output_video:
-        temp_output_video_path = temp_output_video.name
-    
+async def compress_video_api(
+    background_tasks: BackgroundTasks,
+    video: UploadFile = File(...),
+    crf: int = 28
+):
+    # Cria arquivo temporário para o input
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_input:
+        input_path = temp_input.name
+        temp_input.write(await video.read())
+
+    # Cria arquivo temporário para o output
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_output:
+        output_path = temp_output.name
+
     try:
-        # Chamar a função para compactar o vídeo
-        compress_video(temp_input_video_path, temp_output_video_path, crf)
-        
-        # Retornar o vídeo comprimido como resposta
-        return FileResponse(temp_output_video_path, media_type='video/mp4', filename='compressed_video.mp4')
+        compress_video(input_path, output_path, crf)
     except Exception as e:
+        cleanup_file(input_path)
+        cleanup_file(output_path)
         return {"error": str(e)}
-    finally:
-        # Limpeza dos arquivos temporários
-        os.remove(temp_input_video_path)
-        os.remove(temp_output_video_path)
+
+    # Agenda a remoção dos arquivos temporários após o envio da resposta
+    background_tasks.add_task(cleanup_file, input_path)
+    background_tasks.add_task(cleanup_file, output_path)
+    
+    return FileResponse(
+        output_path,
+        media_type="video/mp4",
+        filename="compressed_video.mp4"
+    )
 
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=8011)
