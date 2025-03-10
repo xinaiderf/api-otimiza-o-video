@@ -1,69 +1,49 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
-from moviepy import VideoFileClip, CompositeVideoClip  # import simplificado para v2.x
+from moviepy.editor import VideoFileClip
 import tempfile
 import os
 import uvicorn
 
 app = FastAPI()
 
-def overlay_videos_with_audio(video_base_path, video_overlay_path, output_path, transparencia):
-    # Carregar os clipes de vídeo usando MoviePy
-    base_clip = VideoFileClip(video_base_path)
-    overlay_clip = VideoFileClip(video_overlay_path)
+def compress_video(input_video_path, output_video_path, crf_value=28):
+    # Carregar o vídeo original
+    video_clip = VideoFileClip(input_video_path)
     
-    # Ajustar a duração do overlay para ser igual à duração do vídeo base
-    overlay_resized = overlay_clip.resized(base_clip.size)
-    overlay_resized = overlay_resized.with_duration(base_clip.duration)
-    
-    # Combinar os vídeos com transparência (caso necessário)
-    video_combined = CompositeVideoClip([
-        base_clip, 
-        overlay_resized.with_opacity(transparencia)
-    ])
-    
-    # Seleciona o áudio: prioriza o do vídeo base e, se não existir, usa o do overlay
-    if base_clip.audio:
-        audio = base_clip.audio
-    elif overlay_clip.audio:
-        audio = overlay_clip.audio
-    else:
-        audio = None
-    
-    # Define o áudio para o vídeo final, se presente
-    if audio:
-        video_combined = video_combined.with_audio(audio)
-    
-    # Escrever o arquivo final com parâmetros otimizados para acelerar a geração
-    video_combined.write_videofile(
-        output_path,
-        codec="libx264",
-        audio_codec="aac",
-        threads=12,              # utiliza múltiplas threads conforme a capacidade da máquina
-        preset="ultrafast",      # acelera a codificação (pode aumentar o tamanho do arquivo)
-        ffmpeg_params=["-crf", "28"],  # ajusta a qualidade para reduzir o tempo de processamento
-        logger=None              # desativa logs detalhados para diminuir overhead
+    # Escrever o vídeo comprimido com configurações otimizadas
+    video_clip.write_videofile(
+        output_video_path,
+        codec="libx264",  # Codec utilizado para compressão eficiente
+        audio_codec="aac",  # Codec de áudio para compatibilidade
+        threads=4,  # Utilize 4 threads para acelerar a compressão
+        preset="ultrafast",  # Preset para acelerar o processo (pode aumentar o tamanho do arquivo)
+        ffmpeg_params=["-crf", str(crf_value)],  # Ajusta o valor de CRF para a compressão
+        logger=None  # Desativa logs detalhados para melhorar performance
     )
 
-@app.post("/overlay/")
-async def overlay_api(video_base: UploadFile = File(...), video_overlay: UploadFile = File(...), transparencia: float = 0.05):
-    temp_video_base = tempfile.mktemp(suffix='.mp4')
-    temp_video_overlay = tempfile.mktemp(suffix='.mp4')
+@app.post("/compress/")
+async def compress_video_api(video: UploadFile = File(...), crf: int = 28):
+    # Criação de arquivos temporários
+    temp_input_video = tempfile.mktemp(suffix='.mp4')
     temp_output_video = tempfile.mktemp(suffix='.mp4')
     
-    with open(temp_video_base, "wb") as f:
-        f.write(await video_base.read())
-    with open(temp_video_overlay, "wb") as f:
-        f.write(await video_overlay.read())
+    # Salvar o arquivo de vídeo enviado para o servidor
+    with open(temp_input_video, "wb") as f:
+        f.write(await video.read())
     
     try:
-        overlay_videos_with_audio(temp_video_base, temp_video_overlay, temp_output_video, transparencia)
-        return FileResponse(temp_output_video, media_type='video/mp4', filename='output.mp4')
+        # Chamar a função para compactar o vídeo
+        compress_video(temp_input_video, temp_output_video, crf)
+        
+        # Retornar o vídeo comprimido como resposta
+        return FileResponse(temp_output_video, media_type='video/mp4', filename='compressed_video.mp4')
     except Exception as e:
         return {"error": str(e)}
     finally:
-        os.remove(temp_video_base)
-        os.remove(temp_video_overlay)
+        # Limpeza dos arquivos temporários
+        os.remove(temp_input_video)
+        os.remove(temp_output_video)
 
 if __name__ == '__main__':
-    uvicorn.run(app, host="0.0.0.0", port=8011)
+    uvicorn.run(app, host="0.0.0.0", port=8010)
