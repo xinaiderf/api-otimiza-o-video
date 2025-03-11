@@ -16,8 +16,7 @@ def compress_video(input_video_path, output_video_path, crf_value=28):
             audio_codec="aac",        # Codec de áudio para compatibilidade
             preset="ultrafast",       # Preset para acelerar o processo (pode aumentar o tamanho do arquivo)
             ffmpeg_params=["-crf", str(crf_value)],  # Ajusta o valor de CRF para a compressão
-            logger=None,              # Desativa logs detalhados para melhorar a performance
-            progress_bar=False        # Remove a barra de progresso para reduzir overhead
+            logger=None               # Desativa logs detalhados para melhorar a performance
         )
 
 def cleanup_file(path: str):
