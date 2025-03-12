@@ -4,6 +4,7 @@ import tempfile
 import os
 import uvicorn
 import subprocess
+import asyncio
 
 app = FastAPI()
 
@@ -19,13 +20,16 @@ def compress_video(input_video_path, output_video_path, crf_value=28):
         '-y',  # Sobrescreve o arquivo de saída, se existir
         output_video_path
     ]
+    # Define o ambiente para garantir compatibilidade com libc 2.35
+    env = os.environ.copy()
+    env["LC_ALL"] = "C"
     try:
-        # Executa o comando FFmpeg e captura saída e erros
-        result = subprocess.run(
+        subprocess.run(
             command, 
             check=True, 
             stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            env=env
         )
     except subprocess.CalledProcessError as e:
         error_message = e.stderr.decode()
@@ -54,7 +58,9 @@ async def compress_video_api(
         output_path = temp_output.name
 
     try:
-        compress_video(input_path, output_path, crf)
+        # Executa a compressão em um executor para não bloquear o event loop
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, compress_video, input_path, output_path, crf)
     except Exception as e:
         cleanup_file(input_path)
         cleanup_file(output_path)
