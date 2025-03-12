@@ -3,21 +3,34 @@ from fastapi.responses import FileResponse
 import tempfile
 import os
 import uvicorn
-from moviepy.video.io.VideoFileClip import VideoFileClip
+import subprocess
 
 app = FastAPI()
 
 def compress_video(input_video_path, output_video_path, crf_value=28):
-    # Utiliza o gerenciador de contexto para garantir o fechamento adequado do vídeo
-    with VideoFileClip(input_video_path) as video_clip:
-        video_clip.write_videofile(
-            output_video_path,
-            codec="libx264",         # Codec para compressão eficiente
-            audio_codec="aac",        # Codec de áudio para compatibilidade
-            preset="ultrafast",       # Preset para acelerar o processo (pode aumentar o tamanho do arquivo)
-            ffmpeg_params=["-crf", str(crf_value)],  # Ajusta o valor de CRF para a compressão
-            logger=None               # Desativa logs detalhados para melhorar a performance
+    # Comando FFmpeg para compressão do vídeo
+    command = [
+        'ffmpeg',
+        '-i', input_video_path,
+        '-vcodec', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', str(crf_value),
+        '-acodec', 'aac',
+        '-y',  # Sobrescreve o arquivo de saída, se existir
+        output_video_path
+    ]
+    try:
+        # Executa o comando FFmpeg e captura saída e erros
+        result = subprocess.run(
+            command, 
+            check=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
         )
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr.decode()
+        print("Erro durante a compressão:", error_message)
+        raise Exception(f"Falha na compressão do vídeo: {error_message}")
 
 def cleanup_file(path: str):
     try:
