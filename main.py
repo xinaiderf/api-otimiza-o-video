@@ -8,15 +8,18 @@ import subprocess
 
 app = FastAPI()
 
+# Defina o caminho para o ffmpeg compatível com GLIBC 2.35.
+# Você pode configurar a variável de ambiente FFMPEG_BIN ou, se preferir, definir diretamente aqui.
+FFMPEG_BIN = os.getenv("FFMPEG_BIN", "ffmpeg2.35")
+
 def compress_video_ffmpeg(input_video_path, output_video_path, scale_factor=0.5):
     """
-    Utiliza o FFmpeg para redimensionar o vídeo de entrada pelo scale_factor e grava o vídeo otimizado.
+    Utiliza o FFmpeg (versão compatível com GLIBC 2.35) para redimensionar o vídeo de entrada pelo scale_factor e gravar o vídeo otimizado.
     A redução na resolução pode diminuir o tamanho do arquivo.
     """
-    # Monta o comando FFmpeg com o filtro de escala. 
-    # 'iw' e 'ih' representam a largura e altura originais do vídeo.
+    # Monta o comando FFmpeg com o filtro de escala.
     command = [
-        'ffmpeg',
+        FFMPEG_BIN,
         '-y',  # sobrescreve o arquivo de saída se ele já existir
         '-i', input_video_path,
         '-vf', f"scale=iw*{scale_factor}:ih*{scale_factor}",
